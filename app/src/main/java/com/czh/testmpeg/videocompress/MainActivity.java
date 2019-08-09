@@ -14,17 +14,25 @@ import android.view.View;
 import android.widget.ScrollView;
 import android.widget.Toast;
 
+import com.czh.testmpeg.CrashHandler;
 import com.czh.testmpeg.R;
 import com.czh.testmpeg.databinding.ActivityMainBinding;
 import com.czh.testmpeg.permission.PermissionsActivity;
 import com.czh.testmpeg.permission.PermissionsChecker;
 import com.czh.testmpeg.videorecord.CameraActivity;
+import com.orhanobut.logger.AndroidLogAdapter;
+import com.orhanobut.logger.CsvFormatStrategy;
+import com.orhanobut.logger.DiskLogAdapter;
+import com.orhanobut.logger.Logger;
+import com.orhanobut.logger.PrettyFormatStrategy;
 
 import java.io.File;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import me.drakeet.materialdialog.MaterialDialog;
+
+import static com.czh.testmpeg.videorecord.CameraActivity.CAMERA_FILE_PATH;
 
 
 /**
@@ -49,9 +57,9 @@ public class MainActivity extends AppCompatActivity {
     ActivityMainBinding mBinding;
     //    private String currentInputVideoPath = "/mnt/sdcard/videokit/in.mp4";
     private String currentInputVideoPath = "";
-    private String currentOutputVideoPath = "/mnt/sdcard/videokit/out.mp4";
+    private String currentOutputVideoPath = "/mnt/sdcard/"+CAMERA_FILE_PATH+"/out.mp4";
     String cmd = "-y -i " + currentInputVideoPath + " -strict -2 -vcodec libx264 -preset ultrafast " +
-            "-crf 24 -acodec aac -ar 44100 -ac 2 -b:a 96k -s 640x480 -aspect 16:9 " + currentOutputVideoPath;
+            "-crf 24 -acodec aac -ar 44100 -ac 2 -b:a 96k -s 640x480 -aspect 1:1 " + currentOutputVideoPath;
     //相机权限,录制音频权限,读写sd卡的权限,都为必须,缺一不可
     private static final String[] PERMISSIONS = new String[]{
             Manifest.permission.CAMERA,
@@ -71,6 +79,23 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        CrashHandler.getInstance().init(this);
+
+        //开启日志打印与保存
+        Logger.addLogAdapter(new AndroidLogAdapter(PrettyFormatStrategy.newBuilder()
+                // 是否显示线程信息，默认为ture
+                .showThreadInfo(false)
+                // 显示的方法行数，默认为2
+                .methodCount(0)
+                // 隐藏内部方法调用到偏移量，默认为5
+                .methodOffset(7)
+                // 每个日志的全局标记。默认PRETTY_LOGGER
+                .tag("TEST")
+                .build()));
+        Logger.addLogAdapter(new DiskLogAdapter(CsvFormatStrategy.newBuilder()
+                .tag("TEST")
+                .build()));
+
         mBinding = DataBindingUtil.setContentView(this, R.layout.activity_main);
 
         mBinding.btnRecord.setOnClickListener(new View.OnClickListener() {
@@ -236,10 +261,28 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    /**
+     * 640x480
+     * 1024*720
+     * -threads 2
+     * -s 1024*720
+     * -aspect 1:1
+     * 参数解释：
+     * -threads： 执行线程数，传入1  单线程压缩
+     * -i：input路径，传入视频文件的路径
+     * -c:v：编码格式，一般都是指定libx264
+     * -crf： 编码质量，取值范围是0-51，默认值为23，数字越小输出视频的质量越高。这里的30是我们经过测试得到的经验值
+     * -preset：转码速度，ultrafast，superfast，veryfast，faster，fast，medium，slow，slower，veryslow和placebo。ultrafast编码速度最快，但压缩率低，生成的文件更大，placebo则正好相反。x264所取的默认值为medium。需要说明的是，preset主要是影响编码的速度，并不会很大的影响编码出来的结果的质量。
+     * -acodec：音频编码，一般采用libmp3lame
+     * arg.thumbVideoPath：最后传入的是视频压缩后保存的路径
+     * -y：输出时覆盖输出目录已存在的同名文件（如果不加此参数，就不会覆盖）
+     * 作者：08_carmelo
+     * 链接：https://www.jianshu.com/p/4f82b058c8ec
+     */
     private void refreshCurrentPath() {
         mBinding.tvVideoFilePath.setText(getString(R.string.path,currentInputVideoPath,getFileSize(currentInputVideoPath)));
         cmd = "-y -i " + currentInputVideoPath + " -strict -2 -vcodec libx264 -preset ultrafast " +
-                "-crf 24 -acodec aac -ar 44100 -ac 2 -b:a 96k -s 480x320 -aspect 16:9 " + currentOutputVideoPath;
+                "-crf 30 -acodec aac -ar 44100 -ac 2 -b:a 96k " + currentOutputVideoPath;
         mBinding.etCommand.setText(cmd);
         mBinding.tvLog.setText("");
     }

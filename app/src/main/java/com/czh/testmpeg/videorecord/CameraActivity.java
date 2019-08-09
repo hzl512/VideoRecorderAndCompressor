@@ -1,19 +1,3 @@
-/*
- * Copyright 2014 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *       http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.czh.testmpeg.videorecord;
 
 import android.app.Activity;
@@ -43,16 +27,22 @@ import android.widget.ArrayAdapter;
 import android.widget.Chronometer;
 import android.widget.Toast;
 
+import com.czh.testmpeg.CameraConfig;
+import com.czh.testmpeg.FileUtils;
 import com.czh.testmpeg.R;
 import com.czh.testmpeg.databinding.ActivityCameraBinding;
 import com.czh.testmpeg.videocompress.MainActivity;
 
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+
+import static android.provider.MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE;
 
 /**
  * Created by chenzhihui on 2016/08/18
@@ -66,11 +56,22 @@ public class CameraActivity extends AppCompatActivity {
     private Camera mCamera;
     private CameraPreview mPreview;
     private MediaRecorder mediaRecorder;
+    private CameraListener cameraListener = null;
+
     private String url_file;
     private static boolean cameraFront = false;
     private static boolean flash = false;
     private long countUp;
     private int quality = CamcorderProfile.QUALITY_480P;
+
+    public static final String CAMERA_FILE_PATH = "concrete";
+
+
+    public interface CameraListener {
+        void onTakePictureSuccess(File pictureFile);
+
+        void onTakePictureFail(byte[] data);
+    }
 
     public static void startActivityForResult(Activity activity, int requestCode) {
         Intent intent = new Intent(activity, CameraActivity.class);
@@ -80,10 +81,69 @@ public class CameraActivity extends AppCompatActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        mediaRecorder = new MediaRecorder();
         mBinding = DataBindingUtil.setContentView(this, R.layout.activity_camera);
         //getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         this.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         initialize();
+    }
+
+    public void setCameraListener(CameraListener cameraListener) {
+        this.cameraListener = cameraListener;
+    }
+
+
+    private void takePicture() {
+//        mCamera.setParameters();
+        Camera.Parameters params = mCamera.getParameters();
+        params.set("rotation", 90);//照片旋转90度
+        mCamera.setParameters(params);
+        mediaRecorder.setCamera(mCamera);
+        try {
+            mediaRecorder.setOrientationHint(90);
+            mediaRecorder.prepare();
+        } catch (Exception e) {
+        }
+        if (mCamera != null){
+            mCamera.takePicture(null, null, mPicture);
+        }
+    }
+
+    private Camera.PictureCallback mPicture = new Camera.PictureCallback() {
+        @Override
+        public void onPictureTaken(byte[] data, Camera camera) {
+            File pictureFile = FileUtils.getOutputMediaFile(MEDIA_TYPE_IMAGE, CAMERA_FILE_PATH);
+
+            if (pictureFile == null) {
+                Log.e(TAG, "Error creating media file, check storage permissions");
+                onTakePictureFail(data);
+                return;
+            }
+
+            try {
+                FileOutputStream fos = new FileOutputStream(pictureFile);
+                fos.write(data);
+                fos.close();
+//                Log.d(TAG, "拍照，存储中: " + Arrays.toString(data));
+                if (cameraListener != null) {
+                    cameraListener.onTakePictureSuccess(pictureFile);
+                }
+                mCamera.startPreview(); //再次进入preview
+                mCamera.cancelAutoFocus();
+            } catch (FileNotFoundException e) {
+                Log.e(TAG, "File not found: " + e.getMessage());
+                onTakePictureFail(data);
+            } catch (IOException e) {
+                Log.e(TAG, "Error accessing file: " + e.getMessage());
+                onTakePictureFail(data);
+            }
+        }
+    };
+
+    private void onTakePictureFail(byte[] data) {
+        if (cameraListener != null) {
+            cameraListener.onTakePictureFail(data);
+        }
     }
 
 
@@ -175,13 +235,14 @@ public class CameraActivity extends AppCompatActivity {
         }
     }
 
-    //点击对焦
+    //自动对焦
     public void initialize() {
         mPreview = new CameraPreview(CameraActivity.this, mCamera);
         mBinding.cameraPreview.addView(mPreview);
         mBinding.buttonCapture.setOnClickListener(captrureListener);
         mBinding.buttonChangeCamera.setOnClickListener(switchCameraListener);
         mBinding.buttonQuality.setOnClickListener(qualityListener);
+        mBinding.buttonPicture.setOnClickListener(pictureListener);
         mBinding.buttonFlash.setOnClickListener(flashListener);
         mBinding.cameraPreview.setOnTouchListener(new View.OnTouchListener() {
             @Override
@@ -195,6 +256,22 @@ public class CameraActivity extends AppCompatActivity {
                     }
                 }
                 return true;
+            }
+        });
+
+        setCameraListener(new CameraListener() {
+            @Override
+            public void onTakePictureSuccess(File pictureFile) {
+                if (pictureFile!=null){
+                    Toast.makeText(CameraActivity.this,
+                            "拍照地址："+pictureFile.getPath()
+                            ,Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onTakePictureFail(byte[] data) {
+
             }
         });
 
@@ -292,6 +369,15 @@ public class CameraActivity extends AppCompatActivity {
                     mBinding.listOfQualities.setVisibility(View.VISIBLE);
                 }
             }
+        }
+    };
+
+    //拍照
+    View.OnClickListener pictureListener=new View.OnClickListener() {
+        @Override
+        public void onClick(View v) {
+
+            takePicture();
         }
     };
 
@@ -450,18 +536,19 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     private boolean prepareMediaRecorder() {
-        mediaRecorder = new MediaRecorder();
         mCamera.unlock();
         mediaRecorder.setCamera(mCamera);
         mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
-        if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT) {
-            if (cameraFront) {
-                mediaRecorder.setOrientationHint(270);
-            } else {
-                mediaRecorder.setOrientationHint(90);
-            }
-        }
+//        if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT) {
+//            if (cameraFront) {
+//                mediaRecorder.setOrientationHint(270);
+//            } else {
+//                mediaRecorder.setOrientationHint(90);
+//            }
+//        }
+
+        mediaRecorder.setOrientationHint(90);
 
         mediaRecorder.setProfile(CamcorderProfile.get(quality));
         File file = new File("/mnt/sdcard/videokit");
@@ -471,7 +558,7 @@ public class CameraActivity extends AppCompatActivity {
         Date d = new Date();
         String timestamp = String.valueOf(d.getTime());
 //        url_file = Environment.getExternalStorageDirectory().getPath() + "/videoKit" + timestamp + ".mp4";
-        url_file = "/mnt/sdcard/videokit/in.mp4";
+        url_file = "/mnt/sdcard/"+CAMERA_FILE_PATH+"/in.mp4";
 //        url_file = "/mnt/sdcard/videokit/" + timestamp + ".mp4";
 
         File file1 = new File(url_file);
@@ -482,7 +569,7 @@ public class CameraActivity extends AppCompatActivity {
         mediaRecorder.setOutputFile(url_file);
 
 //        https://developer.android.com/reference/android/media/MediaRecorder.html#setMaxDuration(int) 不设置则没有限制
-//        mediaRecorder.setMaxDuration(CameraConfig.MAX_DURATION_RECORD); //设置视频文件最长时间 60s.
+        mediaRecorder.setMaxDuration(CameraConfig.MAX_DURATION_RECORD); //设置视频文件最长时间 60s.
 //        https://developer.android.com/reference/android/media/MediaRecorder.html#setMaxFileSize(int) 不设置则没有限制
 //        mediaRecorder.setMaxFileSize(CameraConfig.MAX_FILE_SIZE_RECORD); //设置视频文件最大size 1G
 

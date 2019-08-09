@@ -24,7 +24,8 @@
             </intent-filter>
         </activity>
         <activity android:name=".permission.PermissionsActivity"/>
-        <activity android:name=".videorecord.CameraActivity"/>
+        <activity android:name=".videorecord.CameraActivity"
+            android:screenOrientation="portrait"/>
     </application>
 
 </manifest>
