@@ -62,7 +62,7 @@ public class CameraActivity extends AppCompatActivity {
     private static boolean cameraFront = false;
     private static boolean flash = false;
     private long countUp;
-    private int quality = CamcorderProfile.QUALITY_480P;
+    private int quality = CamcorderProfile.QUALITY_720P;
 
     public static final String CAMERA_FILE_PATH = "concrete";
 
@@ -92,19 +92,18 @@ public class CameraActivity extends AppCompatActivity {
         this.cameraListener = cameraListener;
     }
 
-
     private void takePicture() {
-//        mCamera.setParameters();
-        Camera.Parameters params = mCamera.getParameters();
-        params.set("rotation", 90);//照片旋转90度
-        mCamera.setParameters(params);
-        mediaRecorder.setCamera(mCamera);
-        try {
-            mediaRecorder.setOrientationHint(90);
-            mediaRecorder.prepare();
-        } catch (Exception e) {
-        }
         if (mCamera != null){
+            Camera.Parameters params = mCamera.getParameters();
+            params.set("rotation", 90);//照片旋转90度
+            mCamera.setParameters(params);
+            mediaRecorder.setCamera(mCamera);
+            try {
+                mediaRecorder.setOrientationHint(90);
+                mediaRecorder.prepare();
+            } catch (Exception e) {
+            }
+
             mCamera.takePicture(null, null, mPicture);
         }
     }
@@ -483,16 +482,16 @@ public class CameraActivity extends AppCompatActivity {
                 Intent intent = new Intent();
                 intent.putExtra(MainActivity.INTENT_EXTRA_VIDEO_PATH, url_file);
                 setResult(MainActivity.RESULT_CODE_FOR_RECORD_VIDEO_SUCCEED, intent);
-                releaseCamera();
                 releaseMediaRecorder();
+                releaseCamera();
                 finish();
             } else {
                 //准备开始录制视频
                 if (!prepareMediaRecorder()) {
                     Toast.makeText(CameraActivity.this, getString(R.string.camera_init_fail), Toast.LENGTH_SHORT).show();
                     setResult(MainActivity.RESULT_CODE_FOR_RECORD_VIDEO_FAILED);
-                    releaseCamera();
                     releaseMediaRecorder();
+                    releaseCamera();
                     finish();
                 }
                 //开始录制视频
@@ -511,8 +510,8 @@ public class CameraActivity extends AppCompatActivity {
                         } catch (final Exception ex) {
                             Log.i("---", "Exception in thread");
                             setResult(MainActivity.RESULT_CODE_FOR_RECORD_VIDEO_FAILED);
-                            releaseCamera();
                             releaseMediaRecorder();
+                            releaseCamera();
                             finish();
                         }
                     }
@@ -531,13 +530,17 @@ public class CameraActivity extends AppCompatActivity {
             mediaRecorder.reset();
             mediaRecorder.release();
             mediaRecorder = null;
-            mCamera.lock();
+            if (mCamera!=null){
+                mCamera.lock();
+            }
         }
     }
 
     private boolean prepareMediaRecorder() {
-        mCamera.unlock();
-        mediaRecorder.setCamera(mCamera);
+        if (mCamera!=null){
+            mCamera.unlock();
+            mediaRecorder.setCamera(mCamera);
+        }
         mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
 //        if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT) {
@@ -705,8 +708,8 @@ public class CameraActivity extends AppCompatActivity {
             }
         }
         setResult(MainActivity.RESULT_CODE_FOR_RECORD_VIDEO_CANCEL);
-        releaseCamera();
         releaseMediaRecorder();
+        releaseCamera();
         finish();
         return super.onKeyDown(keyCode, event);
     }
@@ -760,6 +763,13 @@ public class CameraActivity extends AppCompatActivity {
             }
         }
     };
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        releaseMediaRecorder();
+        releaseCamera();
+    }
 
 }
 

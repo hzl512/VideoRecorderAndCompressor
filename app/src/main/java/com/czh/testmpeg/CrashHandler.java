@@ -215,7 +215,7 @@ public class CrashHandler implements UncaughtExceptionHandler {
         mDeviceCrashInfo.put("EXEPTION", ex.getLocalizedMessage());
         mDeviceCrashInfo.put(STACK_TRACE, result);
         String exStr="EXEPTION\n"+ex.getLocalizedMessage()+"\n"+STACK_TRACE+"\n"+result;
-        Logger.e("test",exStr);
+        Logger.e(exStr);
         return null;
     }
 
